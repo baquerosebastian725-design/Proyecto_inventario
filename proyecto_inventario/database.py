@@ -2,63 +2,71 @@ import json
 import aiofiles
 import asyncio
 
-ARCHIVO_BD = "inventario.json"
+ARCHIVO_BD = "Inventario.json"
+db_lock = asyncio.Lock()
+
 
 async def leer_base_datos():
-    try: 
-        async with aiofiles.open(ARCHIVO_BD, mode='r' , encoding='utf-8') as f:
+    try:
+        async with aiofiles.open(ARCHIVO_BD, mode="r", encoding="utf-8") as f:
             contenido = await f.read()
             return json.loads(contenido)
     except FileNotFoundError:
-        return []  # Retorna una lista vacía si el archivo no existe  
+        return [] # lista vacia si el archivo no existe
 
 async def guardar_base_datos(datos):
-    async with aiofiles.open(ARCHIVO_BD, mode='w', encoding='utf-8') as f:
+    async with aiofiles.open(ARCHIVO_BD, mode="w", encoding="utf-8") as f:
         await f.write(json.dumps(datos, indent=4))
 
-# === Create === Post
+async def crear_producto(codigo, nombre, stock):# la info dentro del () son parametros
+    async with db_lock:
 
-async def crear_producto(codigo, nombre, stock):
-    #Simular latencia
-    await asyncio.sleep(0.5)
-    datos = await leer_base_datos()
+        await asyncio.sleep(0.5)
+        datos = await leer_base_datos()
 
-    for dato in datos:
-        if dato['codigo'] == codigo:#son los parametros de la funcion y el dato que ya existe en la base de datos
-            raise ValueError(f"El producto con el código {codigo} ya existe.")
-        
-    nuevo_producto = {"codigo": codigo,"nombre": nombre,"stock": stock}
-    datos.append(nuevo_producto)#agregar a los datos que ya existen el nuevo producto
-    await guardar_base_datos(datos)#guarda el archivo con el nuevo producto
-    return nuevo_producto#devuelve el nuevo producto creado
+        for dato in datos:
+            if dato["codigo"] == codigo:
+                raise ValueError(f"El producto con el codigo {codigo} ya existe.")
+            
+        nuevo_producto = {"codigo": codigo, "nombre": nombre, "stock": stock}
+        datos.append(nuevo_producto)# agregar a los datos que ya existen el nuevo producto
+        await guardar_base_datos(datos)
+        return nuevo_producto
 
-#=== Read === Get
+#obtener_producto, actualizar_stock y eliminar_producto quedan 
 
-async def obtener_producto(codigo):
-    await asyncio.sleep(0.2)
-    datos = await leer_base_datos()
-    for dato in datos:
-        if dato['codigo'] == codigo:
-            return dato
-    raise KeyError(f"Producto {codigo} no ha sido encontrado.")
+async def alerta_stock_bajo(codigo, nombre, stock):
+    await asyncio.sleep(2)  # simula el envío de la notificación al administrador
+    print(f"   >>> ALERTA ADMIN: '{nombre}' ({codigo}) tiene stock bajo: {stock} unidades.")
 
-#=== Update === Put
+async def vender_producto(codigo, cantidad_vendida):
+    async with db_lock:
 
-async def actualizar_stock(nuevo_stock, codigo):
-    await asyncio.sleep(0.5)
-    datos = await leer_base_datos()
+        await asyncio.sleep(0.5)
+        datos = await leer_base_datos()
+        for dato in datos:
+            if dato["codigo"] == codigo:
+                producto = dato
+                break
+        if producto:
+            raise KeyError("Producto no encontrado")
 
-    for dato in datos:
-        if dato ["codigo"] == codigo:
-            dato["stock"] = nuevo_stock
-            await guardar_base_datos
-            return dato
-    raise KeyError(f"Producto {codigo} no ha sido encontrado.")
+        # Validación
+        if cantidad_vendida > producto["stock"]:
+            raise ValueError("Stock insuficiente")
 
-# === Delete ===
+        producto["stock"] -= cantidad_vendida
+        await guardar_base_datos(datos)
 
-async def eliminar_producto(codigo):
-    await asyncio.sleep(0.5)
-    datos = await leer_base_datos()
+        if producto["stock"] < 3: 
+            tarea = asyncio.create_task(alerta_stock_bajo(producto["codigo"], producto["nombre"], producto["stock"]))
+            tareas_alerta.append(tarea)
 
-    nuevos_datos = [dato for dato in datos if dato["codigo"] != codigo]
+        # Retorno
+        return {
+            "Mensaje": "Se vendio la Venta",
+            "Codigo": codigo,
+            "PRODUCTO": producto["nombre"],
+            "CANTIDAD_VENDIDA": cantidad_vendida,
+            "STOCK_RESTANTE": producto["stock"],
+            }
